@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: Dual Cart for WooCommerce
-Description: Dual Cart for WooCommerce by Chinmay
+Description: Dual Cart for WooCommerce, a PET project, by Chinmay.
 Version: 1.0
 Author: Chinmay
 */
