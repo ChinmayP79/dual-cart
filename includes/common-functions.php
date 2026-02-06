@@ -1,15 +1,20 @@
 <?php
 defined( 'ABSPATH' ) || exit; // Exit if accessed directly
 
-// Enqueue frontend script that refreshes the shortcode on cart changes
-add_action( 'wp_enqueue_scripts', 'dc_enqueue_cart_widget_script' );
-function dc_enqueue_cart_widget_script() {
+// Enqueue frontend scripts, styles and localize AJAX parameters
+add_action( 'wp_enqueue_scripts', 'dc_enqueue_dual_cart_script' );
+function dc_enqueue_dual_cart_script() {
     if ( is_admin() ) return;
 
     // Enqueue script
     $handle = 'dc-dual-cart';
     $src = DC_PLUGIN_URL . 'assets/js/dc-dual-cart.js';
-    wp_enqueue_script( $handle, $src, array( 'jquery' ), null, true );
+    wp_enqueue_script( $handle, $src, array( 'jquery' ), time() );
+
+    // Enqueue styles
+    $css_handle = 'dc-dual-cart-style';
+    $css_src = DC_PLUGIN_URL . 'assets/css/dc-dual-cart.css';
+    wp_enqueue_style( $css_handle, $css_src, array(), time() );
 
     // Localize script with AJAX parameters
     wp_localize_script( $handle, 'dc_dual_cart_params', array(
@@ -18,13 +23,21 @@ function dc_enqueue_cart_widget_script() {
     ) );
 }
 
+// Get current cart session key
+function dc_get_current_cart_session_key() {
+	if ( ! WC()->session ) return DC_PLUGIN_STD_KEY; // Default to standard cart if session not available
+
+	$current_cart = ! empty( WC()->session->get( 'current_cart' ) ) ? WC()->session->get( 'current_cart' ) : DC_PLUGIN_STD_KEY;
+	return $current_cart;
+}
+
 // Function to switch cart session based on selected cart type
 function dc_switch_cart_session( $selected_cart ) {
     // Ensure WooCommerce session and cart are initialized
     if ( empty( WC()->session ) || empty( WC()->cart ) ) return;
 
     // Get the current cart type from session
-    $current_cart = ! empty( WC()->session->get( 'current_cart' ) ) ? WC()->session->get( 'current_cart' ) : DC_PLUGIN_STD_KEY;
+    $current_cart = dc_get_current_cart_session_key();
 
     if ( $selected_cart === $current_cart ) return; // No need to switch
 

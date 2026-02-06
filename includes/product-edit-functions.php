@@ -1,63 +1,102 @@
 <?php
 defined( 'ABSPATH' ) || exit; // Exit if accessed directly
 
-// Product edit metabox to set '_dc_prod_prebooking' meta
-add_action( 'add_meta_boxes', 'dc_add_product_prebooking_metabox' );
-function dc_add_product_prebooking_metabox() {
-    add_meta_box(
-        'dc_prod_prebooking',
-        'Dual Cart: Prebooking',
-        'dc_product_prebooking_metabox_callback',
-        'product',
-        'normal',
-        'high'
-    );
+// Add custom tab to product data metabox for simple products
+add_filter( 'woocommerce_product_data_tabs', 'dc_prod_simp_tab' );
+function dc_prod_simp_tab( $tabs) {
+	$tabs['dc_tab'] = array(
+		'label'     => __( 'Dual Cart: Prebooking', 'dual-cart' ),
+		'target'    => 'dc_prod_simp_tab_options',
+		'class'     => array( 'show_if_simple' ),
+	);
+	return $tabs;
 }
 
-// Metabox callback to display '_dc_prod_prebooking' checkbox and '_dc_prod_prebooking_stock' integer field
-function dc_product_prebooking_metabox_callback( $post ) {
-    $product = wc_get_product( $post->ID );
-    $value = $product->get_meta( '_dc_prod_prebooking', true );
-    $checked = ( $value === 'yes' ) ? 'checked' : '';
-
-    // Get stock meta (ensure integer)
-    $stock_value = $product->get_meta( '_dc_prod_prebooking_stock', true );
-    $stock_value = '' === $stock_value ? '' : intval( $stock_value );
-    ?>
-    <p>
-        <label for="dc_prod_prebooking_field">
-            <?php esc_html_e( 'Prebooking:', 'dual-cart' ); ?>
-            <input type="checkbox" id="dc_prod_prebooking_field" name="dc_prod_prebooking" value="yes" <?php echo $checked; ?> />
-            <?php esc_html_e( 'Enable for prebooking', 'dual-cart' ); ?>
-        </label>
-    </p>
-
-    <p>
-        <label for="dc_prod_prebooking_stock_field">
-            <?php esc_html_e( 'Prebooking stock:', 'dual-cart' ); ?>
-            <input type="number" id="dc_prod_prebooking_stock_field" name="dc_prod_prebooking_stock" value="<?php echo esc_attr( $stock_value ); ?>" min="0" step="1" />
-        </label>
-    </p>
+// Content for the custom tab for simple products
+add_filter( 'woocommerce_product_data_panels', 'dc_prod_simp_tab_content' );
+function dc_prod_simp_tab_content() {
+	global $post;
+	?>
+    <div id='dc_prod_simp_tab_options' class='panel woocommerce_options_panel'>
+        <div class='options_group'>
+        <?php
+        woocommerce_wp_checkbox( array(
+            'id' => 'dc_prod_prebooking',
+            'label' => __( 'Prebooking', 'dual-cart' ),
+            'desc_tip' => true,
+            'description' => __( 'Enable prebooking for this product.', 'dual-cart' ),
+            'value' => get_post_meta( $post->ID, '_dc_prod_prebooking', true ),
+        ));
+        woocommerce_wp_text_input( array(
+            'id' => 'dc_prod_prebooking_stock',
+            'label' => __( 'Prebooking Stock', 'dual-cart' ),
+            'desc_tip' => true,
+            'description' => __( 'Enter Prebooking Stock Quantity.', 'dual-cart' ),
+            'type' => 'number',
+            'value' => get_post_meta( $post->ID, '_dc_prod_prebooking_stock', true ),
+            'data_type' => 'stock',
+        ));
+        ?>
+        </div>
+    </div>
     <?php
 }
 
-// Save metabox data for '_dc_prod_prebooking' and '_dc_prod_prebooking_stock' meta
-add_action( 'save_post', 'dc_save_product_prebooking_meta', 10, 2 );
-function dc_save_product_prebooking_meta( $post_id, $post ) {
-    if ( $post->post_type !== 'product' ) return;
-    if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) return;
+// Save custom fields from the custom tab for simple products
+add_action( 'woocommerce_process_product_meta_simple', 'dc_prod_simp_tab_save'  );
+function dc_prod_simp_tab_save( $post_id ) {
+	if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) return;
     if ( ! current_user_can( 'edit_post', $post_id ) ) return;
 
-    $value = ( isset( $_POST['dc_prod_prebooking'] ) && 'yes' === $_POST['dc_prod_prebooking'] ) ? 'yes' : 'no';
+    // Save prebooking meta
+    $checkbox = ( isset( $_POST['dc_prod_prebooking'] ) && 'yes' === $_POST['dc_prod_prebooking'] ) ? 'yes' : 'no';
 
     // Sanitize and ensure integer (non-negative)
     $stock = isset( $_POST['dc_prod_prebooking_stock'] ) ? intval( $_POST['dc_prod_prebooking_stock'] ) : 0;
-    if ( $stock < 0 ) {
-        $stock = 0;
-    }
+    if ( $stock < 0 ) $stock = 0;
 
-    $product = wc_get_product( $post->ID );
-    $product->update_meta_data( '_dc_prod_prebooking', $value );
-    $product->update_meta_data( '_dc_prod_prebooking_stock', $stock );
-    $product->save(); // Ensure product data is saved
+    // Update product meta
+    update_post_meta( $post_id, '_dc_prod_prebooking', $checkbox );
+    update_post_meta( $post_id, '_dc_prod_prebooking_stock', $stock );
+}
+
+// Add custom fields to variable product variations
+add_action( 'woocommerce_variation_options_pricing', 'equinavia_add_custom_fields_to_variations_cart_switcher', 10, 3 );
+function equinavia_add_custom_fields_to_variations_cart_switcher( $loop, $variation_data, $variation ) {
+    woocommerce_wp_checkbox( array(
+        'id' => "dc_prod_prebooking[{$loop}]",
+        'label' => __( 'Prebooking', 'dual-cart' ),
+        'desc_tip' => true,
+        'description' => __( 'Enable prebooking for this variation.', 'dual-cart' ),
+        'value' => get_post_meta( $variation->ID, '_dc_prod_prebooking', true ),
+        'wrapper_class' => 'form-row form-row-first',
+    ));
+    woocommerce_wp_text_input( array(
+        'id' => "dc_prod_prebooking_stock[{$loop}]",
+        'label' => __( 'Prebooking Stock', 'dual-cart' ),
+        'desc_tip' => true,
+        'description' => __( 'Enter Prebooking Stock Quantity.', 'dual-cart' ),
+        'type' => 'number',
+        'value' => get_post_meta( $variation->ID, '_dc_prod_prebooking_stock', true ),
+        'data_type' => 'stock',
+        'wrapper_class' => 'form-row form-row-last',
+    ));
+}
+
+// Save custom fields for variable product variations
+add_action( 'woocommerce_save_product_variation', 'save_custom_checkbox_variation_field', 10, 2 );
+function save_custom_checkbox_variation_field( $variation_id, $i ) {
+    if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) return;
+    if ( ! current_user_can( 'edit_post', $variation_id ) ) return;
+
+    // Save prebooking meta
+    $checkbox = ( isset( $_POST['dc_prod_prebooking'][$i] ) && 'yes' === $_POST['dc_prod_prebooking'][$i] ) ? 'yes' : 'no';
+
+    // Sanitize and ensure integer (non-negative)
+    $stock = isset( $_POST['dc_prod_prebooking_stock'][$i] ) ? intval( $_POST['dc_prod_prebooking_stock'][$i] ) : 0;
+    if ( $stock < 0 ) $stock = 0;
+
+    // Update product meta
+    update_post_meta( $variation_id, '_dc_prod_prebooking', $checkbox );
+    update_post_meta( $variation_id, '_dc_prod_prebooking_stock', $stock );
 }
